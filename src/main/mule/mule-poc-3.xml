@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<sftp:config name="SFTP_Config" doc:name="SFTP Config" doc:id="c2afae48-af9e-4d75-813e-4233eb77467e" >
+		<sftp:connection host="192.168.4.138" username="invenio" password="Invenio" />
+	</sftp:config>
+	<flow name="mule-poc-3Flow" doc:id="c1f76422-a60a-4154-865d-379700763bf6" >
+		<scheduler doc:name="Scheduler" doc:id="77ec245e-3e57-4f54-b889-7bbb4d553e8d" >
+			<scheduling-strategy >
+				<cron expression="* 5 * ? * * *" />
+			</scheduling-strategy>
+		</scheduler>
+		<sftp:read doc:name="Read" doc:id="025052b6-10a1-4f7b-8bb1-b34539c943d9" config-ref="SFTP_Config" path="/orders/details_employee_db.json"/>
+		<choice doc:name="Choice" doc:id="1181ae85-0eb1-4a2c-bcf2-4c77e90aab55">
+			<when expression='payload.status  == "success"'>
+				<logger level="INFO" doc:name="Logger" doc:id="c7902020-78ce-404b-8ab1-561bf45a6922" message="#[payload]"/>
+				<ee:transform doc:name="Transform Message" doc:id="2218cec9-510f-401c-9ffe-f191891637de">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<sftp:write doc:name="Write" doc:id="abb7a57e-fdd4-4ace-bdf4-00aa95aa12ec" config-ref="SFTP_Config" path="/orders/processed/details_employee_db.json"/>
+				<ee:transform doc:name="Transform Message" doc:id="d627181c-56ee-42cd-bcbd-20fa5d2cf38d">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+
+	
+(payload.data filter ((item, index) -> item.employee_age >60)) map {
+    "no": $.id,
+    "name": ($.employee_name splitBy " ")[0],
+    "age": $.employee_age,
+    "salary": $.employee_salary as String
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<flow-ref doc:name="Flow Reference" doc:id="7711e945-07f6-4c1d-8ad0-302fab54fcd2" name="database-insertFlow"/>
+			</when>
+		</choice>
+	</flow>
+</mule>
